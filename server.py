@@ -1,27 +1,36 @@
+# server.py (لرفع على Render أو أي VPS)
 from flask import Flask, request, jsonify
+from flask_cors import CORS
+import os
 
 app = Flask(__name__)
+CORS(app)
 
-latest_rid = None  # نخزّن آخر RID هنا
+NUM_QUESTIONS = int(os.getenv("NUM_QUESTIONS", "5"))
+# يمكن ربط مباراة محددة لاحقاً؛ هنا نحافظ على آخر حالة (بسيط)
+answers = [-1] * NUM_QUESTIONS
 
-@app.route('/save_rid', methods=['POST'])
+@app.route("/save_rid", methods=["POST"])
 def save_rid():
-    global latest_rid
-    data = request.get_json()
-    if not data or "rid" not in data:
-        return jsonify({"error": "No RID received"}), 400
+    global answers
+    data = request.get_json(force=True)
+    q_index = int(data.get("index", -1))
+    ans = int(data.get("answer", -1))
+    if 0 <= q_index < len(answers):
+        answers[q_index] = ans
+        return jsonify({"status": "ok", "answers": answers}), 200
+    else:
+        return jsonify({"status": "error", "msg": "invalid index"}), 400
 
-    latest_rid = data["rid"]
-    print(f"[✅] RID updated: {latest_rid}")
-    return jsonify({"status": "RID saved", "rid": latest_rid}), 200
-
-
-@app.route('/get_rid', methods=['GET'])
+@app.route("/get_rid", methods=["GET"])
 def get_rid():
-    if latest_rid is None:
-        return jsonify({"error": "No RID found"}), 404
-    return jsonify({"rid": latest_rid}), 200
+    return jsonify({"answers": answers})
 
+@app.route("/reset", methods=["POST"])
+def reset():
+    global answers
+    answers = [-1] * NUM_QUESTIONS
+    return jsonify({"status": "reset", "answers": answers})
 
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)))
